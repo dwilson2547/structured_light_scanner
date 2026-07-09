@@ -16,7 +16,7 @@ triangulation of the laser curves.
 ## Quickstart
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
+conda activate py313
 pip install -e ".[dev]"
 
 sls preview --left 0 --right 2           # live view, find your /dev/video indices

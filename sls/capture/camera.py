@@ -25,12 +25,17 @@ class Frame:
 
 
 class Camera:
-    def __init__(self, device: int, width: int = 1280, height: int = 800, fps: int = 100):
+    def __init__(self, device: int | str, width: int = 1280, height: int = 800, fps: int = 100):
+        if isinstance(device, str) and device.isdigit():
+            device = int(device)  # bare index passed as a string, e.g. from argparse
         self.device = device
         self._cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
         if not self._cap.isOpened():
-            raise RuntimeError(f"cannot open /dev/video{device}")
-        self._cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"GREY"))
+            raise RuntimeError(f"cannot open {device}")
+        # These modules only hit 100+ fps in MJPG (compressed); raw YUYV/GREY caps at
+        # 10 fps at 1280x800 and two cameras' worth of raw YUYV saturates a shared
+        # USB 2.0 Hi-Speed bus's isochronous budget, causing one stream to lag.
+        self._cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         self._cap.set(cv2.CAP_PROP_FPS, fps)

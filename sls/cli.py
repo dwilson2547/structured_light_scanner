@@ -9,15 +9,26 @@ SESSIONS = Path("sessions")
 
 
 def _cam_args(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--left", type=int, default=0, help="left camera /dev/video index")
-    p.add_argument("--right", type=int, default=2, help="right camera /dev/video index")
+    p.add_argument("--left", default="/dev/sls-cam-left",
+                    help="left camera device (path or /dev/video index; "
+                         "defaults to the udev-persistent symlink)")
+    p.add_argument("--right", default="/dev/sls-cam-right",
+                    help="right camera device (path or /dev/video index; "
+                         "defaults to the udev-persistent symlink)")
 
 
 def cmd_preview(args) -> None:
     from .capture.camera import Camera
-    from .viz.preview import preview
 
-    preview(Camera(args.left), Camera(args.right))
+    left, right = Camera(args.left), Camera(args.right)
+    if args.web:
+        from .viz.web_preview import serve
+
+        serve(left, right, host=args.host, port=args.port)
+    else:
+        from .viz.preview import preview
+
+        preview(left, right)
 
 
 def cmd_board(args) -> None:
@@ -108,6 +119,11 @@ def main() -> None:
 
     p = sub.add_parser("preview", help="live two-camera view (free-running)")
     _cam_args(p)
+    p.add_argument("--web", action="store_true",
+                    help="serve MJPEG over HTTP instead of a local GUI window "
+                         "(for headless nodes / field use from a phone browser)")
+    p.add_argument("--host", default="0.0.0.0", help="--web bind host")
+    p.add_argument("--port", type=int, default=8080, help="--web bind port")
     p.set_defaults(fn=cmd_preview)
 
     p = sub.add_parser("board", help="export the ChArUco calibration board PNG")
