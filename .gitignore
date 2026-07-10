@@ -220,7 +220,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 # scanner data
-sessions/
-calib/
+/sessions/
+/calib/
 *.ply
 charuco_board.png
