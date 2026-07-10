@@ -31,6 +31,24 @@ def cmd_preview(args) -> None:
         preview(left, right)
 
 
+def cmd_bench(args) -> None:
+    from .capture.camera import Camera
+    from .viz.bench import bench
+
+    cam = Camera(args.cam, width=args.width, height=args.height,
+                 fps=args.fps, fourcc=args.fourcc)
+    bench(cam, min_intensity=args.min_intensity)
+
+
+def cmd_sync(args) -> None:
+    from .capture.trigger import TriggerBox
+
+    with TriggerBox(args.port) as trig:
+        print(trig.sync(args.frames))
+    print("dt = L-R exposure-start skew, lat = FSIN->exposure latency,")
+    print("exp = strobe width (exposure). Expect |dt| well under 100 us.")
+
+
 def cmd_board(args) -> None:
     from .calib.intrinsics import export_board_png, make_board
 
@@ -125,6 +143,22 @@ def main() -> None:
     p.add_argument("--host", default="0.0.0.0", help="--web bind host")
     p.add_argument("--port", type=int, default=8080, help="--web bind port")
     p.set_defaults(fn=cmd_preview)
+
+    p = sub.add_parser("bench", help="single-camera laser line bench test (trim-pot tuning)")
+    p.add_argument("--cam", default="0", help="camera device (path or /dev/video index)")
+    p.add_argument("--min-intensity", type=float, default=40.0)
+    # defaults sized for usbipd/WSL2: uncompressed modes arrive truncated,
+    # MJPG 640x480 is the largest mode that survives the tunnel intact
+    p.add_argument("--fourcc", default="MJPG")
+    p.add_argument("--width", type=int, default=640)
+    p.add_argument("--height", type=int, default=480)
+    p.add_argument("--fps", type=int, default=100)
+    p.set_defaults(fn=cmd_bench)
+
+    p = sub.add_parser("sync", help="measure L/R camera exposure sync via strobe outputs")
+    p.add_argument("--port", default="/dev/ttyACM0")
+    p.add_argument("--frames", type=int, default=32)
+    p.set_defaults(fn=cmd_sync)
 
     p = sub.add_parser("board", help="export the ChArUco calibration board PNG")
     p.add_argument("--out", default="charuco_board.png")

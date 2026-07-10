@@ -25,17 +25,19 @@ class Frame:
 
 
 class Camera:
-    def __init__(self, device: int | str, width: int = 1280, height: int = 800, fps: int = 100):
+    def __init__(self, device: int | str, width: int = 1280, height: int = 800, fps: int = 100,
+                 fourcc: str = "MJPG"):
         if isinstance(device, str) and device.isdigit():
             device = int(device)  # bare index passed as a string, e.g. from argparse
         self.device = device
         self._cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
         if not self._cap.isOpened():
             raise RuntimeError(f"cannot open {device}")
-        # These modules only hit 100+ fps in MJPG (compressed); raw YUYV/GREY caps at
-        # 10 fps at 1280x800 and two cameras' worth of raw YUYV saturates a shared
-        # USB 2.0 Hi-Speed bus's isochronous budget, causing one stream to lag.
-        self._cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        # Default MJPG: these modules only hit 100+ fps in MJPG (compressed); raw
+        # YUYV/GREY caps at 10 fps at 1280x800 and two cameras' worth of raw YUYV
+        # saturates a shared USB 2.0 Hi-Speed bus's isochronous budget, causing
+        # one stream to lag.
+        self._cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*fourcc))
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         self._cap.set(cv2.CAP_PROP_FPS, fps)
@@ -51,7 +53,26 @@ class Camera:
         h = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         return w, h
 
+    def set_manual_exposure(self, value: int) -> None:
+        """Manual exposure (V4L2 units, typically 100 us steps)."""
+        self._cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)  # V4L2: 1 = manual
+        self._cap.set(cv2.CAP_PROP_EXPOSURE, value)
+
+    def get_exposure(self) -> int:
+        return int(self._cap.get(cv2.CAP_PROP_EXPOSURE)) or 100
+
+    # Over usbipd/WSL2, two cameras issuing V4L2 STREAMON at the same instant
+    # can knock one clean off the virtual bus (it re-enumerates and needs a
+    # usbipd re-attach; measured 2026-07-07). Staggered starts stream fine at
+    # full rate, so serialize stream starts across all Camera instances.
+    _last_start = 0.0
+    _start_gap_s = 1.0
+
     def start(self) -> None:
+        wait = Camera._last_start + Camera._start_gap_s - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        Camera._last_start = time.monotonic()
         self._running = True
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()

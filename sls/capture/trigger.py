@@ -5,6 +5,7 @@ Line protocol (newline-terminated ASCII, firmware echoes `ok`/`err ...`):
     START <fps> <pattern>   begin FSIN pulses; pattern: AB0 | A0 | ON | OFF
     STOP                    stop pulsing
     LASER <A|B> <0|1>       manual laser override while stopped
+    SYNC [n]                measure L/R strobe-output skew over n frames
     PING                    liveness check
 
 Patterns:
@@ -54,6 +55,15 @@ class TriggerBox:
 
     def laser(self, which: str, on: bool) -> None:
         self._cmd(f"LASER {which} {1 if on else 0}")
+
+    def sync(self, frames: int = 32) -> str:
+        """Measure camera strobe timing; blocks ~30 ms per frame on the Pico."""
+        old_timeout = self._ser.timeout
+        self._ser.timeout = frames * 0.05 + 5.0
+        try:
+            return self._cmd(f"SYNC {frames}")
+        finally:
+            self._ser.timeout = old_timeout
 
     def close(self) -> None:
         try:
